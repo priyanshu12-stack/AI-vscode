@@ -87,7 +87,7 @@ const WebContainerPreview = ({
             console.warn("⚠️ Setup is taking unusually long...");
             setShowRetry(true);
           }
-        }, 45000); // 45 seconds timeout for UI feedback
+        }, 120000); // 120 seconds timeout for UI feedback (increased from 45s)
 
         try {
           console.log("🧐 Checking for existing package.json...");
@@ -168,7 +168,7 @@ const WebContainerPreview = ({
 
           // Add 60-second timeout for npm install
           const installTimeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("npm install timeout - taking too long")), 60000)
+            setTimeout(() => reject(new Error("npm install timeout - taking too long")), 180000)
           );
 
           const installExitCode = await Promise.race([
@@ -258,7 +258,7 @@ const WebContainerPreview = ({
 
           // prefer dev for live preview; allow longer timeout
           try {
-            await tryStart(["npm", "run", "dev"], 90000);
+            await tryStart(["npm", "run", "dev"], 180000); // 3 mins timeout
           } catch (devErr) {
             if (terminalRef.current?.writeToTerminal) {
               terminalRef.current.writeToTerminal(
@@ -272,15 +272,15 @@ const WebContainerPreview = ({
             } catch (startErr) {
               if (terminalRef.current?.writeToTerminal) {
                 terminalRef.current.writeToTerminal(
-                  `❌ All start attempts failed: ${startErr instanceof Error ? startErr.message : String(startErr)}\r\nUsing fallback localhost:3000\r\n`
+                  `❌ All start attempts failed: ${startErr instanceof Error ? startErr.message : String(startErr)}\r\nCheck your package.json scripts or network connection.\r\n`
                 );
               }
             }
           }
 
-          // If not started but we have no errors, fallback to localhost
+          // If not started, don't fallback to localhost (it hits the main app dashboard)
           if (!previewUrl) {
-            setPreviewUrl("http://localhost:3000");
+            console.warn("⚠️ No preview URL established after start attempts.");
           }
 
           setLoadingState((prev) => ({ ...prev, starting: false, ready: true }));
@@ -290,7 +290,7 @@ const WebContainerPreview = ({
           if (terminalRef.current?.writeToTerminal) {
             terminalRef.current.writeToTerminal(`❌ Server start error: ${startErr instanceof Error ? startErr.message : String(startErr)}\r\n`);
           }
-          setPreviewUrl("http://localhost:3000");
+          // No fallback to localhost:3000
           setLoadingState((prev) => ({ ...prev, starting: false, ready: true }));
           setIsSetupComplete(true);
         }

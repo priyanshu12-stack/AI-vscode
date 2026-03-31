@@ -1,39 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { db } from "@/lib/db";
 import { currentUser } from "@/modules/auth/actions";
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Cache discovered model name to avoid repeated ListModels calls
-let cachedGeminiModel: string | null = null;
-
-async function discoverGeminiModel(apiKey: string): Promise<string | null> {
-  if (cachedGeminiModel) return cachedGeminiModel;
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`;
-    const resp = await fetch(url, { method: "GET" });
-    if (!resp.ok) {
-      console.warn("Gemini ListModels failed status:", resp.status, await resp.text());
-      return null;
-    }
-    const json = await resp.json();
-    const models = json?.models || json?.model || [];
-    if (Array.isArray(models) && models.length > 0) {
-      // prefer names that contain code/chat/text
-      const preferred = models
-        .map((m: any) => (m.name || m).toString())
-        .find((n: string) => /code|chat|text|generative/i.test(n));
-      const first = preferred || models[0].name || models[0];
-      // model names may be returned as "models/NAME" - strip prefix
-      const modelName = (first as string).replace(/^models\//, "");
-      cachedGeminiModel = modelName;
-      console.info("Discovered Gemini model:", modelName);
-      return modelName;
-    }
-  } catch (err) {
-    console.warn("Failed to discover Gemini models:", err);
-  }
-  return null;
-}
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -89,16 +60,17 @@ Always provide clear, practical answers. Use proper code formatting when showing
           console.log("✅ Gemini response successful");
           return text.trim();
         }
-      } catch (geminiErr: any) {
+      } catch (geminiErr) {
+        const err = geminiErr as any; // eslint-disable-line @typescript-eslint/no-explicit-any
         console.error("❌ Gemini generation failed:", {
-          message: geminiErr?.message,
-          stack: geminiErr?.stack?.split('\n')[0],
-          status: geminiErr?.status,
-          statusText: geminiErr?.statusText
+          message: err?.message,
+          stack: err?.stack?.split('\n')[0],
+          status: err?.status,
+          statusText: err?.statusText
         });
         
         // Silent fallback for the user if 2.5-flash is invalid
-        if (geminiErr?.message?.includes("404") || geminiErr?.message?.includes("not found")) {
+        if (err?.message?.includes("404") || err?.message?.includes("not found")) {
             console.log("🔄 404 detected for 2.5-flash, trying 1.5-flash as a silent fallback...");
             try {
                 const genAI = new GoogleGenerativeAI(GEMINI_KEY);
@@ -183,7 +155,7 @@ Always provide clear, practical answers. Use proper code formatting when showing
           return text.trim();
         }
       } catch (openaiErr) {
-        console.error("✗ OpenAI failed:", openaiErr instanceof Error ? openaiErr.message : openaiErr);
+        console.error("❌ OpenAI failed:", openaiErr instanceof Error ? openaiErr.message : String(openaiErr));
       }
     } else {
       console.log("⚠ OpenAI API key not configured");
@@ -226,7 +198,7 @@ async function generateAutoSuggestions(
   codeContext: string,
   mode?: string,
   language?: string
-): Promise<any[]> {
+): Promise<Array<{ title: string; content: string }>> {
   try {
     const type = mode === "review" ? "CODE_REVIEW" : mode === "fix" ? "ERROR_FIX" : mode === "optimize" ? "OPTIMIZATION" : "SUGGESTION";
 
@@ -284,7 +256,7 @@ Generate 2-3 suggestions only.`;
           }
         }
       } catch (geminiErr) {
-        console.warn("✗ Gemini suggestion generation failed:", geminiErr instanceof Error ? geminiErr.message : geminiErr);
+        console.warn("❌ Gemini suggestion generation failed:", geminiErr instanceof Error ? geminiErr.message : String(geminiErr));
       }
     } else {
       console.log("⚠ Gemini API key not configured for suggestions");
@@ -422,7 +394,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate suggestions if enabled
-    let suggestions: any[] = [];
+    let suggestions: Array<{ title: string; content: string }> = [];
     if (generateSuggestions && (codeContext || (await shouldGenerateSuggestions(messages, mode)))) {
       try {
         const contextToAnalyze = codeContext || message;
@@ -449,7 +421,7 @@ export async function POST(req: NextRequest) {
                   userId: user.id!,
                   type: mode === "review" ? "CODE_REVIEW" : mode === "fix" ? "ERROR_FIX" : mode === "optimize" ? "OPTIMIZATION" : "SUGGESTION",
                   title: suggestion.title || "Suggestion",
-                  content: suggestion.content || suggestion,
+                  content: suggestion.content || "",
                   codeContext: contextToAnalyze.substring(0, 1000),
                   chatMessageId: chatMessageId,
                   playgroundId: playgroundId || undefined,

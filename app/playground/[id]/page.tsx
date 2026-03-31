@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +39,6 @@ import WebContainerPreview from "@/modules/webcontainers/components/webcontainer
 import { useWebContainer } from "@/modules/webcontainers/hooks/useWebContainer";
 import {
   AlertCircle,
-  Bot,
   FileText,
   FolderOpen,
   Save,
@@ -48,7 +49,6 @@ import { useParams } from "next/navigation";
 import React, {
   useCallback,
   useEffect,
-  useReducer,
   useRef,
   useState,
 } from "react";
@@ -202,13 +202,15 @@ const MainPlaygroundPage = () => {
           JSON.stringify(latestTemplateData)
         );
 
-// @ts-expect-error recursive template tree typing
-        const updateFileContent = (items: unknown[]) =>
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const updateFileContent = (items: unknown[]): any[] =>
   items.map((item) => {
     if (typeof item !== "object" || item === null) {
       return item;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const node = item as any;
 
     if ("folderName" in node) {
@@ -236,8 +238,7 @@ const MainPlaygroundPage = () => {
           }
         }
 
-           const newTemplateData = await saveTemplateData(updatedTemplateData);
-        setTemplateData(newTemplateData || updatedTemplateData);
+        await saveTemplateData(updatedTemplateData);
 // Update open files
         const updatedOpenFiles = openFiles.map((f) =>
           f.id === targetFileId
@@ -284,7 +285,8 @@ const MainPlaygroundPage = () => {
     try {
       await Promise.all(unsavedFiles.map((f) => handleSave(f.id)));
       toast.success(`Saved ${unsavedFiles.length} file(s)`);
-    } catch (error) {
+    } catch (err) {
+      console.error("Failed to save all files:", err);
       toast.error("Failed to save some files");
     }
   };

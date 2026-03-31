@@ -286,14 +286,14 @@ TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({
 
     // Dynamically import xterm and addons only on the client runtime
     const [{ Terminal }, { FitAddon }, { WebLinksAddon }, { SearchAddon }] = await Promise.all([
-      import("xterm"),
-      import("xterm-addon-fit"),
-      import("xterm-addon-web-links"),
-      import("xterm-addon-search"),
+      import("@xterm/xterm"),
+      import("@xterm/addon-fit"),
+      import("@xterm/addon-web-links"),
+      import("@xterm/addon-search"),
     ]);
 
     // Import xterm css dynamically
-    await import("xterm/css/xterm.css");
+    await import("@xterm/xterm/css/xterm.css");
 
     const terminal = new Terminal({
       cursorBlink: true,

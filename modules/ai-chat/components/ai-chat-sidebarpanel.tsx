@@ -125,7 +125,7 @@ export const AIChatSidePanel: React.FC<AIChatSidePanelProps> = ({
     const [filterType, setFilterType] = useState<string>("all");
     const [autoSave, setAutoSave] = useState(true);
     const [streamResponse, setStreamResponse] = useState(true);
-    const [model, setModel] = useState<string>("gemini-2.5-flash");
+    const [model, setModel] = useState<string>("gemini-1.5-flash");
     const [playgroundId, setPlaygroundId] = useState<string | undefined>(undefined);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -418,9 +418,7 @@ export const AIChatSidePanel: React.FC<AIChatSidePanelProps> = ({
                                                 onChange={(e) => setModel(e.target.value)}
                                                 className="bg-zinc-900/60 border border-zinc-800 rounded px-2 py-1 text-zinc-200 focus:outline-none"
                                             >
-                                                <option value="gemini-2.5-flash">Gemini 1.5 Flash</option>
-                                                <option value="gpt-4o">GPT-4o</option>
-                                                <option value="codellama">CodeLlama</option>
+                                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Original)</option>
                                             </select>
                                         </div>
                                         <div className="relative">

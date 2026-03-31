@@ -20,7 +20,7 @@ interface ChatRequest {
   codeContext?: string;
 }
 
-async function generateAIResponse(messages: ChatMessage[]): Promise<string> {
+async function generateAIResponse(messages: ChatMessage[], selectedModel?: string): Promise<string> {
   const systemPrompt = `You are a helpful AI coding assistant. You help developers with:
 - Code explanations and debugging
 - Best practices and architecture advice  
@@ -47,7 +47,7 @@ Always provide clear, practical answers. Use proper code formatting when showing
 
     if (GEMINI_KEY && GEMINI_KEY !== "YOUR_GEMINI_API_KEY" && !GEMINI_KEY.includes("YOUR")) {
       try {
-        const modelName = "gemini-2.5-flash";
+        const modelName = "gemini-1.5-flash";
         console.log(`⚡ Attempting Gemini API with model: ${modelName}`);
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
         const model = genAI.getGenerativeModel({ model: modelName });
@@ -226,7 +226,7 @@ Generate 2-3 suggestions only.`;
       try {
         console.log("Attempting Gemini for suggestions...");
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         
         const result = await model.generateContent([
           {
@@ -366,7 +366,7 @@ export async function POST(req: NextRequest) {
     ];
 
     // Generate AI response
-    const aiResponse = await generateAIResponse(messages);
+    const aiResponse = await generateAIResponse(messages, body.model);
 
     // Store chat message in database if user is logged in
     if (user) {

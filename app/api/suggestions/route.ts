@@ -55,8 +55,8 @@ export async function generateAISuggestions(
     const GEMINI_KEY = process.env.GEMINI_API_KEY;
     if (GEMINI_KEY) {
       try {
-        const modelId = (await discoverGeminiModelForSuggestions(GEMINI_KEY)) || "gemini-1.5-pro";
-        const genAI: any = new GoogleGenerativeAI({ apiKey: GEMINI_KEY });
+        const modelId = (await discoverGeminiModelForSuggestions(GEMINI_KEY)) || "gemini-1.5-flash";
+        const genAI: any = new GoogleGenerativeAI(GEMINI_KEY);
         const model: any = genAI.getGenerativeModel({ model: modelId });
 
         const result: any = await model.generateContent({ input: [{ text: `${systemPrompt}\n\n${userPrompt}` }] });
@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
         db.suggestion.create({
           data: {
             userId: user.id!,
-            type: type || "GENERAL",
+            type: (type as any) || "GENERAL",
             content: content,
             codeContext: codeContext.substring(0, 5000), // Store code context (limit to 5000 chars)
             playgroundId: playgroundId || undefined,

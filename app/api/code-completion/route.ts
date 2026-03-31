@@ -185,7 +185,7 @@ async function generateSuggestion(prompt: string): Promise<string> {
 
     if (GEMINI_KEY && GEMINI_KEY !== "YOUR_GEMINI_API_KEY" && !GEMINI_KEY.includes("YOUR")) {
       try {
-        const modelName = "gemini-2.5-flash";
+        const modelName = "gemini-1.5-flash";
         console.log(`⚡ Attempting Gemini code completion with model: ${modelName}`);
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
         const model = genAI.getGenerativeModel({ model: modelName });

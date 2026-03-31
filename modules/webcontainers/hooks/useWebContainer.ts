@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { WebContainer } from "@webcontainer/api";
 import { TemplateFolder } from "@/modules/playground/lib/path-to-json";
+import type { WebContainer } from "@webcontainer/api";
 
 interface UseWebContainerProps {
   templateData: TemplateFolder;
@@ -28,20 +28,67 @@ export const useWebContainer = ({
 
     async function initializeWebContainer() {
       try {
-        const webcontainerInstance = await WebContainer.boot();
+        if (typeof window === "undefined") return;
+
+        console.log("🛠️ Initializing WebContainer...");
+        
+        const win = window as any;
+        
+        // 1. Definition check for globalThis (should be handled by layout script already)
+        if (!win.globalThis) {
+           win.globalThis = win;
+        }
+
+        // 2. Singleton boot logic
+        if (!win.__webcontainerInstance) {
+          console.log("⚡ Booting new WebContainer instance...");
+          const { WebContainer } = await import("@webcontainer/api");
+          
+          try {
+            // HACK: Intercept Object.defineProperty to prevent internal bootstrapper from crashing 
+            // on 'globalThis' redefinition if it's already defined as non-configurable.
+            const originalDefineProperty = Object.defineProperty;
+            (Object as any).defineProperty = function(obj: any, prop: string, descriptor: any) {
+              if ((obj === window || obj === globalThis) && prop === 'globalThis') {
+                console.warn("🛡️ Intercepted globalThis redefinition attempt");
+                return obj;
+              }
+              return originalDefineProperty.apply(this, arguments as any);
+            };
+
+            win.__webcontainerInstance = await WebContainer.boot();
+            
+            // Restore original defineProperty
+            (Object as any).defineProperty = originalDefineProperty;
+            
+            console.log("✅ WebContainer boot successful");
+          } catch (bootErr) {
+            console.error("❌ WebContainer boot failed:", bootErr);
+            // Don't cache a failed instance
+            delete win.__webcontainerInstance;
+            throw bootErr;
+          }
+        } else {
+          console.log("♻️ Using existing WebContainer instance");
+        }
 
         if (!mounted) return;
 
+        const webcontainerInstance = win.__webcontainerInstance;
         setInstance(webcontainerInstance);
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Failed to initialize WebContainer:", error);
+        
+        // Only set loading to false if we have a valid instance
+        if (webcontainerInstance) {
+          setIsLoading(false);
+          setError(null);
+        } else {
+          throw new Error("WebContainer instance is null after boot");
+        }
+
+      } catch (err) {
+        console.error("🚨 Failed to initialize WebContainer:", err);
         if (mounted) {
-          setError(
-            error instanceof Error
-              ? error.message
-              : "Failed to initialize WebContainer"
-          );
+          setError(err instanceof Error ? err.message : String(err));
           setIsLoading(false);
         }
       }
@@ -51,9 +98,7 @@ export const useWebContainer = ({
 
     return () => {
       mounted = false;
-      if (instance) {
-        instance.teardown();
-      }
+      // Note: We don't nullify the instance here as it's a singleton on the window
     };
   }, []);
 

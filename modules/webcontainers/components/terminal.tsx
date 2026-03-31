@@ -1,11 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
-import { WebLinksAddon } from "xterm-addon-web-links";
-import { SearchAddon } from "xterm-addon-search";
-import "xterm/css/xterm.css";
+// xterm and its addons are imported dynamically to avoid server-side evaluation (which
+// causes "self is not defined" errors during SSR). Types are kept as `any`.
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Copy, Trash2, Download } from "lucide-react";
@@ -33,9 +30,9 @@ TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({
   webContainerInstance
 }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const term = useRef<Terminal | null>(null);
-  const fitAddon = useRef<FitAddon | null>(null);
-  const searchAddon = useRef<SearchAddon | null>(null);
+  const term = useRef<any | null>(null);
+  const fitAddon = useRef<any | null>(null);
+  const searchAddon = useRef<any | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
@@ -143,6 +140,18 @@ TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({
         commandHistory.current.forEach((cmd, index) => {
           term.current!.writeln(`  ${index + 1}  ${cmd}`);
         });
+        writePrompt();
+        return;
+      }
+
+      if (command.trim() === "help") {
+        term.current.writeln("Available commands:");
+        term.current.writeln("  help     Show this help");
+        term.current.writeln("  clear    Clear the terminal");
+        term.current.writeln("  history  Show command history");
+        term.current.writeln("  ls       List files");
+        term.current.writeln("  npm      Run npm commands");
+        term.current.writeln("  node     Run node commands");
         writePrompt();
         return;
       }
@@ -272,8 +281,19 @@ TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({
     }
   }, [executeCommand, writePrompt]);
 
-  const initializeTerminal = useCallback(() => {
+  const initializeTerminal = useCallback(async () => {
     if (!terminalRef.current || term.current) return;
+
+    // Dynamically import xterm and addons only on the client runtime
+    const [{ Terminal }, { FitAddon }, { WebLinksAddon }, { SearchAddon }] = await Promise.all([
+      import("xterm"),
+      import("xterm-addon-fit"),
+      import("xterm-addon-web-links"),
+      import("xterm-addon-search"),
+    ]);
+
+    // Import xterm css dynamically
+    await import("xterm/css/xterm.css");
 
     const terminal = new Terminal({
       cursorBlink: true,
@@ -416,6 +436,7 @@ TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({
 
   useEffect(() => {
     if (webContainerInstance && term.current && !isConnected) {
+      console.log("🔌 Connecting terminal to WebContainer instance...");
       connectToWebContainer();
     }
   }, [webContainerInstance, connectToWebContainer, isConnected]);

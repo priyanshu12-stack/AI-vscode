@@ -203,20 +203,26 @@ const MainPlaygroundPage = () => {
         );
 
 // @ts-expect-error recursive template tree typing
-          const updateFileContent = (items: unknown[]) =>
-        // @ts-expect-error dynamic template item structure
+        const updateFileContent = (items: unknown[]) =>
+  items.map((item) => {
+    if (typeof item !== "object" || item === null) {
+      return item;
+    }
 
-          items.map((item) => {
-            if ("folderName" in item) {
-              return { ...item, items: updateFileContent(item.items) };
-            } else if (
-              item.filename === fileToSave.filename &&
-              item.fileExtension === fileToSave.fileExtension
-            ) {
-              return { ...item, content: fileToSave.content };
-            }
-            return item;
-          });
+    const node = item as any;
+
+    if ("folderName" in node) {
+      return { ...node, items: updateFileContent(node.items) };
+    } else if (
+      node.filename === fileToSave.filename &&
+      node.fileExtension === fileToSave.fileExtension
+    ) {
+      return { ...node, content: fileToSave.content };
+    }
+
+    return node;
+  });
+
         updatedTemplateData.items = updateFileContent(
           updatedTemplateData.items
         );
@@ -384,7 +390,7 @@ const MainPlaygroundPage = () => {
 
               <div className="flex items-center gap-1">
                 <Tooltip>
-                  <TooltipTrigger>
+                  <TooltipTrigger asChild>
                     <Button
                       size="sm"
                       variant="outline"

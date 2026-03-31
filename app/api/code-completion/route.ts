@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 
 interface CodeSuggestionRequest {
@@ -25,16 +26,23 @@ interface CodeContext {
 export async function POST(request: NextRequest) {
   try {
     const body: CodeSuggestionRequest = await request.json();
+    console.log("/api/code-completion request body:", JSON.stringify(body).slice(0, 2000));
 
     const { fileContent, cursorLine, cursorColumn, suggestionType, fileName } =
       body;
 
-    // Validate input
-    if (!fileContent || cursorLine < 0 || cursorColumn < 0 || !suggestionType) {
-      return NextResponse.json(
-        { error: "Invalid input parameters" },
-        { status: 400 }
-      );
+    // Validate input (allow empty fileContent string)
+    if (typeof fileContent !== "string") {
+      return NextResponse.json({ error: "Invalid input: fileContent must be a string" }, { status: 400 });
+    }
+    if (!Number.isInteger(cursorLine) || cursorLine < 0) {
+      return NextResponse.json({ error: "Invalid input: cursorLine must be a non-negative integer" }, { status: 400 });
+    }
+    if (!Number.isInteger(cursorColumn) || cursorColumn < 0) {
+      return NextResponse.json({ error: "Invalid input: cursorColumn must be a non-negative integer" }, { status: 400 });
+    }
+    if (!suggestionType || typeof suggestionType !== "string") {
+      return NextResponse.json({ error: "Invalid input: suggestionType is required" }, { status: 400 });
     }
 
     const context = analyzeCodeContext(
@@ -142,38 +150,123 @@ Generate suggestion:`;
 
 async function generateSuggestion(prompt: string): Promise<string> {
   try {
-    const response = await fetch("http://localhost:11434/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "codellama:latest",
-        prompt,
-        stream: false,
-        option: {
-          temperature: 0.7,
-          max_tokens: 300,
-        },
-      }),
+    // Try local model first
+    try {
+      const response = await fetch("http://localhost:11434/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "codellama:latest",
+          prompt,
+          stream: false,
+          options: {
+            temperature: 0.7,
+            max_tokens: 300,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const suggestion = data.response;
+        if (suggestion) return sanitizeSuggestion(suggestion);
+      } else {
+        console.warn("Local model returned non-ok status for code completion", response.status);
+      }
+    } catch (localErr) {
+      console.warn("Local model fetch failed for code completion:", localErr);
+    }
+    
+    // Try Gemini (recommended primary backend)
+    const GEMINI_KEY = process.env.GEMINI_API_KEY;
+    console.log("Code Completion: Checking Gemini Key...", { 
+      hasKey: !!GEMINI_KEY, 
+      isPlaceholder: GEMINI_KEY === "YOUR_GEMINI_API_KEY",
+      includesYour: GEMINI_KEY?.includes("YOUR")
     });
 
-       if (!response.ok) {
-      throw new Error(`AI service error: ${response.statusText}`)
+    if (GEMINI_KEY && GEMINI_KEY !== "YOUR_GEMINI_API_KEY" && !GEMINI_KEY.includes("YOUR")) {
+      try {
+        console.log("Attempting Gemini for code completion with model: gemini-2.5-flash");
+        const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent([{ text: prompt }]);
+        const response = await result.response;
+        const text = await response.text();
+        if (text) return sanitizeSuggestion(text);
+      } catch (geminiErr) {
+        console.error("✗ Gemini code completion failed:", geminiErr);
+        if (geminiErr instanceof Error) {
+          console.error("Error name:", geminiErr.name);
+          console.error("Error message:", geminiErr.message);
+          console.error("Error stack:", geminiErr.stack);
+        }
+      }
     }
 
-      const data = await response.json()
-    let suggestion = data.response
+    // Fallback to OpenAI if configured
+    const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    if (OPENAI_KEY) {
+      try {
+        const resp = await fetch("https://api.openai.com/v1/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${OPENAI_KEY}`,
+          },
+          body: JSON.stringify({ model: "text-davinci-003", prompt, max_tokens: 300, temperature: 0.2 }),
+        });
 
-     // Clean up the suggestion
-    if (suggestion.includes("```")) {
-      const codeMatch = suggestion.match(/```[\w]*\n?([\s\S]*?)```/)
-      suggestion = codeMatch ? codeMatch[1].trim() : suggestion
+        const json = await resp.json();
+        const text = json?.choices?.[0]?.text;
+        if (text) return sanitizeSuggestion(text);
+      } catch (openErr) {
+        console.warn("OpenAI fallback failed for code completion:", openErr);
+      }
     }
 
-    return suggestion
+    // Fallback to context-based suggestions
+    return generateContextBasedSuggestion(prompt);
   } catch (error) {
-      console.error("AI generation error:", error)
-    return "// AI suggestion unavailable"
+    console.error("AI generation error:", error);
+    return generateContextBasedSuggestion("");
   }
+}
+
+function generateContextBasedSuggestion(prompt: string): string {
+  // Provide basic suggestions based on patterns when AI is unavailable
+  if (prompt.includes("function") || prompt.includes("const ")) {
+    return "{\n  // Implementation here\n}";
+  }
+  if (prompt.includes("return")) {
+    return "return null;";
+  }
+  if (prompt.includes("import")) {
+    return 'import {} from "";';
+  }
+  if (prompt.includes(".then")) {
+    return ".then((data) => {\n  // Handle response\n})";
+  }
+  if (prompt.includes("=>")) {
+    return "=> {\n  // Your code here\n}";
+  }
+  if (prompt.includes("catch")) {
+    return ".catch((error) => {\n  console.error(error);\n})";
+  }
+  if (prompt.includes("if")) {
+    return "{\n  // Condition true\n}";
+  }
+  // Default generic suggestion
+  return "// Continue implementation";
+}
+
+function sanitizeSuggestion(suggestion: string) {
+  let s = suggestion;
+  if (s.includes("```")) {
+    const codeMatch = s.match(/```[\w]*\n?([\s\S]*?)```/);
+    s = codeMatch ? codeMatch[1].trim() : s;
+  }
+  return s;
 }
 
 // Helper functions for code analysis

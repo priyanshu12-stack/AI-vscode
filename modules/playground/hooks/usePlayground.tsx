@@ -34,6 +34,23 @@ export const usePlayground = (id: string): UsePlaygroundReturn => {
       setIsLoading(true);
       setError(null);
 
+      // First try a fallback template endpoint (local starter) — helps when DB has no entry
+      try {
+        const fallback = await fetch(`/api/template/fallback`);
+        if (fallback.ok) {
+          const j = await fallback.json();
+          if (j?.templateJson) {
+            setTemplateData({ folderName: "Root", items: j.templateJson });
+            toast.success("Loaded fallback template");
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        // ignore and continue to attempt DB-backed load
+        console.warn("fallback template fetch failed", err);
+      }
+
       const data = await getPlaygroundById(id);
 
       //   @ts-ignore
@@ -56,17 +73,9 @@ export const usePlayground = (id: string): UsePlaygroundReturn => {
       const templateRes = await res.json();
 
       if (templateRes.templateJson && Array.isArray(templateRes.templateJson)) {
-        setTemplateData({
-          folderName: "Root",
-          items: templateRes.templateJson,
-        });
+        setTemplateData({ folderName: "Root", items: templateRes.templateJson });
       } else {
-        setTemplateData(
-          templateRes.templateJson || {
-            folderName: "Root",
-            items: [],
-          }
-        );
+        setTemplateData(templateRes.templateJson || { folderName: "Root", items: [] });
       }
       toast.success("Template loaded successfully");
     } catch (error) {

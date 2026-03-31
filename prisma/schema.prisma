@@ -31,6 +31,7 @@ model User {
   myPlaground Playground[]
   staredPlayground StarMark[]
   chatMessages ChatMessage[]
+  suggestions Suggestion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -72,11 +73,12 @@ model Playground {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime @updatedAt
  
- Starmark   StarMark[]
+  Starmark   StarMark[]
   userId  String
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   templateFiles TemplateFile[]
+  suggestions   Suggestion[]
 }
 
 
@@ -107,9 +109,44 @@ model ChatMessage {
   userId String 
   role   String  // "user" or "assitant"
   content String
+  playgroundId String?
   createdAt DateTime  @default(now())
 
   user  User @relation(fields: [userId] , references: [id] , onDelete: Cascade)
+  suggestions Suggestion[]
 
   @@index([userId])
+}
+
+enum SuggestionType {
+  SUGGESTION
+  CODE_REVIEW
+  ERROR_FIX
+  OPTIMIZATION
+  GENERAL
+}
+
+model Suggestion {
+  id  String @id @default(cuid()) @map("_id")
+  userId String
+  playgroundId String?
+  chatMessageId String?
+  type SuggestionType @default(SUGGESTION)
+  title String?
+  content String
+  codeContext String?
+  isApplied Boolean @default(false)
+  appliedAt DateTime?
+  rating Int? // 1-5 rating by user
+  feedback String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  playground Playground? @relation(fields: [playgroundId], references: [id], onDelete: Cascade)
+  chatMessage ChatMessage? @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([playgroundId])
+  @@index([chatMessageId])
 } 

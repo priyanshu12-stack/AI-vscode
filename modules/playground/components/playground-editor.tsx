@@ -349,9 +349,8 @@ export const PlaygroundEditor = ({
       tabCommandRef.current.dispose()
     }
 
-    tabCommandRef.current = editor.addCommand(
-      monaco.KeyCode.Tab,
-      () => {
+    tabCommandRef.current = editor.onKeyDown((e: any) => {
+      if (e.keyCode === monaco.KeyCode.Tab) {
         console.log("TAB PRESSED", {
           hasSuggestion: !!currentSuggestionRef.current,
           hasActiveSuggestion: hasActiveSuggestionAtPosition(),
@@ -362,13 +361,13 @@ export const PlaygroundEditor = ({
         // CRITICAL: Block if already processing
         if (isAcceptingSuggestionRef.current) {
           console.log("BLOCKED: Already in the process of accepting, ignoring Tab")
+          e.preventDefault()
           return
         }
 
         // CRITICAL: Block if just accepted
         if (suggestionAcceptedRef.current) {
           console.log("BLOCKED: Suggestion was just accepted, using default tab")
-          editor.trigger("keyboard", "tab", null)
           return
         }
 
@@ -378,18 +377,16 @@ export const PlaygroundEditor = ({
           const accepted = acceptCurrentSuggestion()
           if (accepted) {
             console.log("SUCCESS: Suggestion accepted via Tab, preventing default behavior")
+            e.preventDefault()
             return // CRITICAL: Return here to prevent default tab behavior
           }
           console.log("FAILED: Suggestion acceptance failed, falling through to default")
         }
 
-        // Default tab behavior (indentation)
+        // Default tab behavior (indentation) - let the editor handle it
         console.log("DEFAULT: Using default tab behavior")
-        editor.trigger("keyboard", "tab", null)
-      },
-      // CRITICAL: Use specific context to override Monaco's built-in Tab handling
-      "editorTextFocus && !editorReadonly && !suggestWidgetVisible",
-    )
+      }
+    })
 
     // Escape to reject
     editor.addCommand(monaco.KeyCode.Escape, () => {

@@ -19,13 +19,14 @@ const Page = async () => {
         {playgrounds && playgrounds.length === 0 ? (
           <EmptyState />
         ) : (
-      <ProjectTable
+    <ProjectTable
   projects={(playgrounds || []).map((p) => ({
     ...p,
     description: p.description ?? "",
     user: {
       ...p.user,
       name: p.user.name ?? "",
+      image: p.user.image ?? "",
     },
   }))}
   onDeleteProject={deleteProjectById}

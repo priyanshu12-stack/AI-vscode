@@ -1,5 +1,8 @@
 import type { Monaco } from "@monaco-editor/react";
 
+// Monaco worker configuration is now handled via the @monaco-editor/react loader in the component.
+
+
 export const getEditorLanguage = (fileExtension: string): string => {
   const extension = fileExtension.toLowerCase();
   const languageMap: Record<string, string> = {

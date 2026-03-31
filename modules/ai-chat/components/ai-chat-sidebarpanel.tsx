@@ -35,7 +35,7 @@ import rehypeKatex from "rehype-katex";
 import {
     TooltipProvider,
 } from "@/components/ui/tooltip";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
     DropdownMenu,
@@ -48,6 +48,7 @@ import {
 import "katex/dist/katex.min.css";
 import Image from "next/image";
 import Stream from "stream";
+import { SuggestionsPanel } from "./suggestions-panel";
 
 interface ChatMessage {
     role: "user" | "assistant";
@@ -119,11 +120,13 @@ export const AIChatSidePanel: React.FC<AIChatSidePanelProps> = ({
     const [chatMode, setChatMode] = useState<
         "chat" | "review" | "fix" | "optimize"
     >("chat");
+    const [activeTab, setActiveTab] = useState<"messages" | "suggestions">("messages");
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState<string>("all");
     const [autoSave, setAutoSave] = useState(true);
     const [streamResponse, setStreamResponse] = useState(true);
-    const [model, setModel] = useState<string>("gpt-6");
+    const [model, setModel] = useState<string>("gemini-1.5-pro");
+    const [playgroundId, setPlaygroundId] = useState<string | undefined>(undefined);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -195,6 +198,9 @@ export const AIChatSidePanel: React.FC<AIChatSidePanelProps> = ({
           stream: streamResponse,
           mode: chatMode,
           model,
+          generateSuggestions: true,
+          playgroundId: playgroundId,
+          codeContext: input.trim(),
         }),
       });
 
@@ -352,298 +358,327 @@ export const AIChatSidePanel: React.FC<AIChatSidePanelProps> = ({
                         </div>
 
                         {/* Enhanced Controls */}
-                        <Tabs
-                            value={chatMode}
-                            onValueChange={(value) => setChatMode(value as any)}
-                            className="px-6"
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <TabsList className="grid w-full grid-cols-4 max-w-md">
-                                    <TabsTrigger value="chat" className="flex items-center gap-1">
+                        <div className="flex items-center justify-between mb-4 px-6">
+                            <Tabs
+                                value={activeTab}
+                                onValueChange={(value) => setActiveTab(value as any)}
+                                className="flex-1"
+                            >
+                                <TabsList className="grid w-full max-w-sm grid-cols-2">
+                                    <TabsTrigger value="messages" className="flex items-center gap-1">
                                         <MessageSquare className="h-3 w-3" />
-                                        Chat
+                                        Messages
                                     </TabsTrigger>
-                                    <TabsTrigger
-                                        value="review"
-                                        className="flex items-center gap-1"
-                                    >
-                                        <Code className="h-3 w-3" />
-                                        Review
-                                    </TabsTrigger>
-                                    <TabsTrigger value="fix" className="flex items-center gap-1">
-                                        <RefreshCw className="h-3 w-3" />
-                                        Fix
-                                    </TabsTrigger>
-                                    <TabsTrigger
-                                        value="optimize"
-                                        className="flex items-center gap-1"
-                                    >
-                                        <Zap className="h-3 w-3" />
-                                        Optimize
+                                    <TabsTrigger value="suggestions" className="flex items-center gap-1">
+                                        <Sparkles className="h-3 w-3" />
+                                        Suggestions
                                     </TabsTrigger>
                                 </TabsList>
+                            </Tabs>
+                        </div>
 
-                                <div className="flex items-center gap-2">
-                                    <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400">
-                                        <span className="text-zinc-500">Model:</span>
-                                        <select
-                                            value={model}
-                                            onChange={(e) => setModel(e.target.value)}
-                                            className="bg-zinc-900/60 border border-zinc-800 rounded px-2 py-1 text-zinc-200 focus:outline-none"
+                        {/* Chat Mode Controls - only show on messages tab */}
+                        {activeTab === "messages" && (
+                            <Tabs
+                                value={chatMode}
+                                onValueChange={(value) => setChatMode(value as any)}
+                                className="px-6"
+                            >
+                                <div className="flex items-center justify-between mb-4">
+                                    <TabsList className="grid w-full grid-cols-4 max-w-md">
+                                        <TabsTrigger value="chat" className="flex items-center gap-1">
+                                            <MessageSquare className="h-3 w-3" />
+                                            Chat
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="review"
+                                            className="flex items-center gap-1"
                                         >
-                                            <option value="gpt-6">gpt-6</option>
-                                            <option value="codellama">codellama</option>
-                                            <option value="llama2">llama2</option>
-                                        </select>
-                                    </div>
-                                    <div className="relative">
-                                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-zinc-500" />
-                                        <Input
-                                            placeholder="Search messages..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="pl-7 h-8 w-40 bg-zinc-800/50 border-zinc-700/50"
-                                        />
-                                    </div>
+                                            <Code className="h-3 w-3" />
+                                            Review
+                                        </TabsTrigger>
+                                        <TabsTrigger value="fix" className="flex items-center gap-1">
+                                            <RefreshCw className="h-3 w-3" />
+                                            Fix
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="optimize"
+                                            className="flex items-center gap-1"
+                                        >
+                                            <Zap className="h-3 w-3" />
+                                            Optimize
+                                        </TabsTrigger>
+                                    </TabsList>
 
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                <Filter className="h-3 w-3" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => setFilterType("all")}>
-                                                All Messages
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setFilterType("chat")}>
-                                                Chat Only
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                onClick={() => setFilterType("code_review")}
+                                    <div className="flex items-center gap-2">
+                                        <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400">
+                                            <span className="text-zinc-500">Model:</span>
+                                            <select
+                                                value={model}
+                                                onChange={(e) => setModel(e.target.value)}
+                                                className="bg-zinc-900/60 border border-zinc-800 rounded px-2 py-1 text-zinc-200 focus:outline-none"
                                             >
-                                                Code Reviews
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                onClick={() => setFilterType("error_fix")}
-                                            >
-                                                Error Fixes
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                onClick={() => setFilterType("optimization")}
-                                            >
-                                                Optimizations
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                                <option value="gpt-4o">GPT-4o</option>
+                                                <option value="codellama">CodeLlama</option>
+                                            </select>
+                                        </div>
+                                        <div className="relative">
+                                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-zinc-500" />
+                                            <Input
+                                                placeholder="Search messages..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="pl-7 h-8 w-40 bg-zinc-800/50 border-zinc-700/50"
+                                            />
+                                        </div>
+
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                    <Filter className="h-3 w-3" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => setFilterType("all")}>
+                                                    All Messages
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => setFilterType("chat")}>
+                                                    Chat Only
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => setFilterType("code_review")}
+                                                >
+                                                    Code Reviews
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => setFilterType("error_fix")}
+                                                >
+                                                    Error Fixes
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => setFilterType("optimization")}
+                                                >
+                                                    Optimizations
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
                                 </div>
-                            </div>
-                        </Tabs>
+                            </Tabs>
+                        )}
                     </div>
 
-                    {/* Messages Container */}
+                    {/* Messages/Suggestions Container */}
                     <div className="flex-1 overflow-y-auto bg-zinc-950">
-                        <div className="p-6 space-y-6">
-                            {filteredMessages.length === 0 && !isLoading && (
-                                <div className="text-center text-zinc-500 py-16">
-                                    <div className="relative w-16 h-16 border rounded-full flex flex-col justify-center items-center mx-auto mb-4">
-                                        <Brain className="h-8 w-8 text-zinc-400" />
+                        {activeTab === "messages" ? (
+                            <div className="p-6 space-y-6">
+                                {filteredMessages.length === 0 && !isLoading && (
+                                    <div className="text-center text-zinc-500 py-16">
+                                        <div className="relative w-16 h-16 border rounded-full flex flex-col justify-center items-center mx-auto mb-4">
+                                            <Brain className="h-8 w-8 text-zinc-400" />
+                                        </div>
+                                        <h3 className="text-xl font-semibold mb-3 text-zinc-300">
+                                            Enhanced AI Assistant
+                                        </h3>
+                                        <p className="text-zinc-400 max-w-md mx-auto leading-relaxed mb-6">
+                                            Advanced AI coding assistant with comprehensive analysis
+                                            capabilities.
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto">
+                                            {[
+                                                "Review my React component for performance",
+                                                "Fix TypeScript compilation errors",
+                                                "Optimize database query performance",
+                                                "Add comprehensive error handling",
+                                                "Implement security best practices",
+                                                "Refactor code for better maintainability",
+                                            ].map((suggestion) => (
+                                                <button
+                                                    key={suggestion}
+                                                    onClick={() => setInput(suggestion)}
+                                                    className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm text-zinc-300 transition-colors text-left"
+                                                >
+                                                    {suggestion}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <h3 className="text-xl font-semibold mb-3 text-zinc-300">
-                                        Enhanced AI Assistant
-                                    </h3>
-                                    <p className="text-zinc-400 max-w-md mx-auto leading-relaxed mb-6">
-                                        Advanced AI coding assistant with comprehensive analysis
-                                        capabilities.
-                                    </p>
-                                    <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto">
-                                        {[
-                                            "Review my React component for performance",
-                                            "Fix TypeScript compilation errors",
-                                            "Optimize database query performance",
-                                            "Add comprehensive error handling",
-                                            "Implement security best practices",
-                                            "Refactor code for better maintainability",
-                                        ].map((suggestion) => (
-                                            <button
-                                                key={suggestion}
-                                                onClick={() => setInput(suggestion)}
-                                                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm text-zinc-300 transition-colors text-left"
-                                            >
-                                                {suggestion}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                                )}
 
-                            {filteredMessages.map((msg) => (
-                                <div key={msg.id} className="space-y-4">
-                                    <div
-                                        className={cn(
-                                            "flex items-start gap-4 group",
-                                            msg.role === "user" ? "justify-end" : "justify-start"
-                                        )}
-                                    >
-                                        {msg.role === "assistant" && (
-                                            <div className="relative w-10 h-10 border rounded-full flex flex-col justify-center items-center">
-                                                <Brain className="h-5 w-5 text-zinc-400" />
-                                            </div>
-                                        )}
-
+                                {filteredMessages.map((msg) => (
+                                    <div key={msg.id} className="space-y-4">
                                         <div
                                             className={cn(
-                                                "max-w-[85%] rounded-xl shadow-sm",
-                                                msg.role === "user"
-                                                    ? "bg-zinc-900/70 text-white p-4 rounded-br-md"
-                                                    : "bg-zinc-900/80 backdrop-blur-sm text-zinc-100 p-5 rounded-bl-md border border-zinc-800/50"
+                                                "flex items-start gap-4 group",
+                                                msg.role === "user" ? "justify-end" : "justify-start"
                                             )}
                                         >
                                             {msg.role === "assistant" && (
-                                                <MessageTypeIndicator
-                                                    type={msg.type}
-                                                    model={msg.model}
-                                                    tokens={msg.tokens}
-                                                />
+                                                <div className="relative w-10 h-10 border rounded-full flex flex-col justify-center items-center">
+                                                    <Brain className="h-5 w-5 text-zinc-400" />
+                                                </div>
                                             )}
 
-                                            <div className="prose prose-invert prose-sm max-w-none">
-                                                <ReactMarkdown
-                                                    remarkPlugins={[remarkGfm, remarkMath]}
-                                                    rehypePlugins={[rehypeKatex]}
-                                                    components={{
-                                                        code: ({ children, className, inline }) => {
-                                                            if (inline) {
+                                            <div
+                                                className={cn(
+                                                    "max-w-[85%] rounded-xl shadow-sm",
+                                                    msg.role === "user"
+                                                        ? "bg-zinc-900/70 text-white p-4 rounded-br-md"
+                                                        : "bg-zinc-900/80 backdrop-blur-sm text-zinc-100 p-5 rounded-bl-md border border-zinc-800/50"
+                                                )}
+                                            >
+                                                {msg.role === "assistant" && (
+                                                    <MessageTypeIndicator
+                                                        type={msg.type}
+                                                        model={msg.model}
+                                                        tokens={msg.tokens}
+                                                    />
+                                                )}
+
+                                                <div className="prose prose-invert prose-sm max-w-none">
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm, remarkMath]}
+                                                        rehypePlugins={[rehypeKatex]}
+                                                        components={{
+                                                            code: ({ children, className, ...props }) => {
+                                                                const inline = !className;
+                                                                if (inline) {
+                                                                    return (
+                                                                        <code className="bg-zinc-800 px-1 py-0.5 rounded text-sm">
+                                                                            {children}
+                                                                        </code>
+                                                                    );
+                                                                }
                                                                 return (
-                                                                    <code className="bg-zinc-800 px-1 py-0.5 rounded text-sm">
-                                                                        {children}
-                                                                    </code>
+                                                                    <div className="bg-zinc-800 rounded-lg p-4 my-4">
+                                                                        <pre className="text-sm text-zinc-100 overflow-x-auto">
+                                                                            <code className={className}>{children}</code>
+                                                                        </pre>
+                                                                    </div>
                                                                 );
+                                                            },
+                                                        }}
+                                                    >
+                                                        {msg.content}
+                                                    </ReactMarkdown>
+                                                </div>
+
+                                                {/* Message actions */}
+                                                <div className="flex items-center justify-between mt-3 pt-2 border-t border-zinc-700/30">
+                                                    <div className="text-xs text-zinc-500">
+                                                        {msg.timestamp.toLocaleTimeString()}
+                                                    </div>
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                navigator.clipboard.writeText(msg.content)
                                                             }
-                                                            return (
-                                                                <div className="bg-zinc-800 rounded-lg p-4 my-4">
-                                                                    <pre className="text-sm text-zinc-100 overflow-x-auto">
-                                                                        <code className={className}>{children}</code>
-                                                                    </pre>
-                                                                </div>
-                                                            );
-                                                        },
-                                                    }}
-                                                >
-                                                    {msg.content}
-                                                </ReactMarkdown>
+                                                            className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200"
+                                                        >
+                                                            <Copy className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => setInput(msg.content)}
+                                                            className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200"
+                                                        >
+                                                            <RefreshCw className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             </div>
 
-                                            {/* Message actions */}
-                                            <div className="flex items-center justify-between mt-3 pt-2 border-t border-zinc-700/30">
-                                                <div className="text-xs text-zinc-500">
-                                                    {msg.timestamp.toLocaleTimeString()}
-                                                </div>
-                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            navigator.clipboard.writeText(msg.content)
-                                                        }
-                                                        className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200"
-                                                    >
-                                                        <Copy className="h-3 w-3" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => setInput(msg.content)}
-                                                        className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200"
-                                                    >
-                                                        <RefreshCw className="h-3 w-3" />
-                                                    </Button>
-                                                </div>
-                                            </div>
+                                            {msg.role === "user" && (
+                                                <Avatar className="h-9 w-9 border border-zinc-700 bg-zinc-800 shrink-0">
+                                                    <AvatarFallback className="bg-zinc-700 text-zinc-300">
+                                                        <User className="h-5 w-5" />
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                            )}
                                         </div>
-
-                                        {msg.role === "user" && (
-                                            <Avatar className="h-9 w-9 border border-zinc-700 bg-zinc-800 shrink-0">
-                                                <AvatarFallback className="bg-zinc-700 text-zinc-300">
-                                                    <User className="h-5 w-5" />
-                                                </AvatarFallback>
-                                            </Avatar>
-                                        )}
                                     </div>
-                                </div>
-                            ))}
+                                ))}
 
-                            {isLoading && (
-                                <div className="flex items-start gap-4 justify-start">
-                                    <div className="relative w-10 h-10 border rounded-full flex flex-col justify-center items-center">
-                                        <Brain className="h-5 w-5 text-zinc-400" />
+                                {isLoading && (
+                                    <div className="flex items-start gap-4 justify-start">
+                                        <div className="relative w-10 h-10 border rounded-full flex flex-col justify-center items-center">
+                                            <Brain className="h-5 w-5 text-zinc-400" />
+                                        </div>
+                                        <div className="bg-zinc-900/80 backdrop-blur-sm border border-zinc-800/50 p-5 rounded-xl rounded-bl-md flex items-center gap-3">
+                                            <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                                            <span className="text-sm text-zinc-300">
+                                                {chatMode === "review"
+                                                    ? "Analyzing code structure and patterns..."
+                                                    : chatMode === "fix"
+                                                        ? "Identifying issues and solutions..."
+                                                        : chatMode === "optimize"
+                                                            ? "Analyzing performance bottlenecks..."
+                                                            : "Processing your request..."}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="bg-zinc-900/80 backdrop-blur-sm border border-zinc-800/50 p-5 rounded-xl rounded-bl-md flex items-center gap-3">
-                                        <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                                        <span className="text-sm text-zinc-300">
-                                            {chatMode === "review"
-                                                ? "Analyzing code structure and patterns..."
-                                                : chatMode === "fix"
-                                                    ? "Identifying issues and solutions..."
-                                                    : chatMode === "optimize"
-                                                        ? "Analyzing performance bottlenecks..."
-                                                        : "Processing your request..."}
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
+                                )}
 
-                            <div ref={messagesEndRef} className="h-1" />
-                        </div>
+                                <div ref={messagesEndRef} className="h-1" />
+                            </div>
+                        ) : (
+                            <SuggestionsPanel playgroundId={playgroundId} />
+                        )}
                     </div>
 
-                    {/* Enhanced Input Form */}
-                    <form
-                        onSubmit={handleSendMessage}
-                        className="shrink-0 p-4 border-t border-zinc-800 bg-zinc-900/80 backdrop-blur-sm"
-                    >
-                        <div className="flex items-end gap-3">
-                            <div className="flex-1 relative">
-                                <Textarea
-                                    placeholder={
-                                        chatMode === "chat"
-                                            ? "Ask about your code, request improvements, or paste code to analyze..."
-                                            : chatMode === "review"
-                                                ? "Describe what you'd like me to review in your code..."
-                                                : chatMode === "fix"
-                                                    ? "Describe the issue you're experiencing..."
-                                                    : "Describe what you'd like me to optimize..."
-                                    }
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                                            handleSendMessage(e as any);
+                    {/* Enhanced Input Form - only show on messages tab */}
+                    {activeTab === "messages" && (
+                        <form
+                            onSubmit={handleSendMessage}
+                            className="shrink-0 p-4 border-t border-zinc-800 bg-zinc-900/80 backdrop-blur-sm"
+                        >
+                            <div className="flex items-end gap-3">
+                                <div className="flex-1 relative">
+                                    <Textarea
+                                        placeholder={
+                                            chatMode === "chat"
+                                                ? "Ask about your code, request improvements, or paste code to analyze..."
+                                                : chatMode === "review"
+                                                    ? "Describe what you'd like me to review in your code..."
+                                                    : chatMode === "fix"
+                                                        ? "Describe the issue you're experiencing..."
+                                                        : "Describe what you'd like me to optimize..."
                                         }
-                                    }}
-                                    disabled={isLoading}
-                                    className="min-h-[44px] max-h-32 bg-zinc-800/50 border-zinc-700/50 text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:ring-blue-500/20 resize-none pr-20"
-                                    rows={1}
-                                />
-                                <div className="absolute right-3 bottom-3 flex items-center gap-2">
-                                    <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-xs text-zinc-500 bg-zinc-800 border border-zinc-700 rounded">
-                                        ⌘↵
-                                    </kbd>
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                                                handleSendMessage(e as any);
+                                            }
+                                        }}
+                                        disabled={isLoading}
+                                        className="min-h-[44px] max-h-32 bg-zinc-800/50 border-zinc-700/50 text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:ring-blue-500/20 resize-none pr-20"
+                                        rows={1}
+                                    />
+                                    <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                                        <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-xs text-zinc-500 bg-zinc-800 border border-zinc-700 rounded">
+                                            ⌘↵
+                                        </kbd>
+                                    </div>
                                 </div>
+                                <Button
+                                    type="submit"
+                                    disabled={isLoading || !input.trim()}
+                                    className="h-11 px-4 bg-blue-600 hover:bg-blue-700 text-white border-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {isLoading ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Send className="h-4 w-4" />
+                                    )}
+                                </Button>
                             </div>
-                            <Button
-                                type="submit"
-                                disabled={isLoading || !input.trim()}
-                                className="h-11 px-4 bg-blue-600 hover:bg-blue-700 text-white border-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {isLoading ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Send className="h-4 w-4" />
-                                )}
-                            </Button>
-                        </div>
-                    </form>
+                        </form>
+                    )}
                 </div>
             </>
         </TooltipProvider>

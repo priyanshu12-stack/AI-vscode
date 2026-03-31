@@ -3,7 +3,6 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 
 import authConfig from "./auth.config"
 import { db } from "./lib/db";
-import { getAccountByUserId, getUserById } from "./modules/auth/actions";
 
 
  
@@ -86,14 +85,14 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
     async jwt({ token, user, account }) {
       if(!token.sub) return token;
-      const existingUser = await getUserById(token.sub)
+      // Using direct DB call to avoid circular dependency with actions
+      const existingUser = await db.user.findUnique({ where: { id: token.sub } });
 
       if(!existingUser) return token;
 
-      const exisitingAccount = await getAccountByUserId(existingUser.id);
-
       token.name = existingUser.name;
       token.email = existingUser.email;
+      // @ts-ignore
       token.role = existingUser.role;
 
       return token;
@@ -113,8 +112,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     },
   },
   
-  secret: process.env.AUTH_SECRET,
   adapter: PrismaAdapter(db),
-  session: { strategy: "jwt" },
   ...authConfig,
 })

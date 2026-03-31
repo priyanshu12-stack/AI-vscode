@@ -67,31 +67,52 @@ Always provide clear, practical answers. Use proper code formatting when showing
 
   try {
     const GEMINI_KEY = process.env.GEMINI_API_KEY;
-    console.log("Chat API: Checking Gemini Key...", { 
+    console.log("🛠️ Chat API Diagnostic:", { 
       hasKey: !!GEMINI_KEY, 
-      isPlaceholder: GEMINI_KEY === "YOUR_GEMINI_API_KEY",
-      includesYour: GEMINI_KEY?.includes("YOUR")
+      keyLength: GEMINI_KEY?.length,
+      keyPrefix: GEMINI_KEY?.substring(0, 7),
+      nodeEnv: process.env.NODE_ENV
     });
 
     if (GEMINI_KEY && GEMINI_KEY !== "YOUR_GEMINI_API_KEY" && !GEMINI_KEY.includes("YOUR")) {
       try {
-        console.log("Attempting Gemini API with model: gemini-2.5-flash");
+        const modelName = "gemini-2.5-flash";
+        console.log(`⚡ Attempting Gemini API with model: ${modelName}`);
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: modelName });
 
         const result = await model.generateContent([{ text: prompt }]);
         const response = await result.response;
         const text = await response.text();
 
         if (text) {
-          console.log("✓ Gemini response successful");
+          console.log("✅ Gemini response successful");
           return text.trim();
         }
-      } catch (geminiErr) {
-        console.error("✗ Gemini generation failed:", geminiErr instanceof Error ? geminiErr.message : geminiErr);
+      } catch (geminiErr: any) {
+        console.error("❌ Gemini generation failed:", {
+          message: geminiErr?.message,
+          stack: geminiErr?.stack?.split('\n')[0],
+          status: geminiErr?.status,
+          statusText: geminiErr?.statusText
+        });
+        
+        // Silent fallback for the user if 2.5-flash is invalid
+        if (geminiErr?.message?.includes("404") || geminiErr?.message?.includes("not found")) {
+            console.log("🔄 404 detected for 2.5-flash, trying 1.5-flash as a silent fallback...");
+            try {
+                const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const result = await model.generateContent([{ text: prompt }]);
+                const response = await result.response;
+                return (await response.text()).trim();
+            } catch (fallbackErr) {
+                console.error("❌ Silent fallback also failed:", fallbackErr);
+            }
+        }
       }
     } else {
-      console.log("⚠ Gemini API key not configured");
+      console.log("⚠ Gemini API key not configured or is a placeholder");
     }
 
     // Try local Ollama-style endpoint as fallback

@@ -179,27 +179,34 @@ async function generateSuggestion(prompt: string): Promise<string> {
     
     // Try Gemini (recommended primary backend)
     const GEMINI_KEY = process.env.GEMINI_API_KEY;
-    console.log("Code Completion: Checking Gemini Key...", { 
-      hasKey: !!GEMINI_KEY, 
-      isPlaceholder: GEMINI_KEY === "YOUR_GEMINI_API_KEY",
-      includesYour: GEMINI_KEY?.includes("YOUR")
-    });
+    console.log("🛠️ Code-Completion Diagnostic:", { hasKey: !!GEMINI_KEY });
 
     if (GEMINI_KEY && GEMINI_KEY !== "YOUR_GEMINI_API_KEY" && !GEMINI_KEY.includes("YOUR")) {
       try {
-        console.log("Attempting Gemini for code completion with model: gemini-2.5-flash");
+        const modelName = "gemini-2.5-flash";
+        console.log(`⚡ Attempting Gemini code completion with model: ${modelName}`);
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: modelName });
         const result = await model.generateContent([{ text: prompt }]);
         const response = await result.response;
         const text = await response.text();
         if (text) return sanitizeSuggestion(text);
-      } catch (geminiErr) {
-        console.error("✗ Gemini code completion failed:", geminiErr);
-        if (geminiErr instanceof Error) {
-          console.error("Error name:", geminiErr.name);
-          console.error("Error message:", geminiErr.message);
-          console.error("Error stack:", geminiErr.stack);
+      } catch (geminiErr: any) {
+        console.error("❌ Gemini code completion failed:", geminiErr?.message);
+        
+        // Silent fallback
+        if (geminiErr?.message?.includes("404") || geminiErr?.message?.includes("not found")) {
+            console.log("🔄 404 detected, trying 1.5-flash fallback...");
+            try {
+                const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const result = await model.generateContent([{ text: prompt }]);
+                const response = await result.response;
+                const text = await response.text();
+                if (text) return sanitizeSuggestion(text);
+            } catch (fallbackErr) {
+                console.error("❌ Fallback failed:", fallbackErr);
+            }
         }
       }
     }

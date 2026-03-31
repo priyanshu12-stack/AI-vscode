@@ -75,9 +75,9 @@ Always provide clear, practical answers. Use proper code formatting when showing
 
     if (GEMINI_KEY && GEMINI_KEY !== "YOUR_GEMINI_API_KEY" && !GEMINI_KEY.includes("YOUR")) {
       try {
-        console.log("Attempting Gemini API with model: gemini-1.5-flash");
+        console.log("Attempting Gemini API with model: gemini-2.5-flash");
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const result = await model.generateContent([{ text: prompt }]);
         const response = await result.response;
@@ -233,7 +233,7 @@ Generate 2-3 suggestions only.`;
       try {
         console.log("Attempting Gemini for suggestions...");
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         
         const result = await model.generateContent([
           {
